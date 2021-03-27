@@ -1,0 +1,57 @@
+
+
+      todo rabbitmq的message有2种状态 Ready Unacked
+       一旦consumer消费这个消息且没有ack的话，这个message不会被其他消费者消费
+
+
+      一个rabbitmq的连接可以打开多个Channel，一个Channel可以create and use 多个exchange
+      exchange与queue可以有多对多的关系
+
+
+
+
+       declare-->中文翻译-声明<看成java的new>
+
+       Channel channel = connection.createChannel();//AutorecoveringChannel
+
+       //todo channel.queueDeclare(queueName, false, false, false, null);//创建一个queueName的Queue，发生在consumer
+       Map<String, RecordedQueue> recordedQueues = Collections.synchronizedMap(new LinkedHashMap<>());
+       //todo channel.queueBind(queueName, exchange_name, routeKey);//queueName<exchange_name---routeKey>
+       List<RecordedBinding> recordedBindings = Collections.synchronizedList(new ArrayList<>());
+       //todo exchangeDeclare(exchange_name, BuiltinExchangeType.DIRECT); //
+       Map<String, RecordedExchange> recordedExchanges = Collections.synchronizedMap(new LinkedHashMap<>());
+       //todo channel.basicConsume(queueName, true, consumer); //consumer获取哪一个queue的消息
+       Map<String, RecordedConsumer> consumers = Collections.synchronizedMap(new LinkedHashMap<>());
+       // 建立一个与rabbitmq的Socket连接，将message发送到rabbitmq服务中，发生在producer
+       channel.basicPublish(exchange_name, routeKey, null, message.getBytes(StandardCharsets.UTF_8));//
+
+  producer发送message到queue去，这个queue含有producer的exchange的name+routeKey，这个queue就可得到producer的message
+
+  queue-name-1<
+    exchange-name-1---routeKey-name-1
+    exchange-name-1---routeKey-name-2
+    exchange-name-1---routeKey-name-3
+
+    exchange-name-2---routeKey-name-1
+  >
+  exchange-name-1<
+    queue-name-1---routeKey-name-1
+    queue-name-1---routeKey-name-2
+
+    queue-name-2---routeKey-name-3
+  >
+
+
+  producer发送message 首先要指定一个
+  exchange<direct<精确匹配routeKey>,fanout<广播，发送到每一个queue>,topic<最常用，# * 模糊匹配，前缀匹配看成MySQL >>
+  怎么指定?---> 就是 channel.exchangeDeclare(exchange_name, BuiltinExchangeType.DIRECT); //todo Map<String, RecordedExchange> recordedExchanges
+  这个exchange就会找到符合的queue <什么是符合的queue--> 这个queue 会有这个producer使用的exchange的name与producer使用的routeKey>，找到放入消息到这个queue中，没有则丢失这个message
+
+  生产者与消费者 要去 跟rabbitmq打交道都要会有 建立connection去获取channel <一个connect可以打开多个connection的>
+  一个channel可以绑定多个queue<consumer要去绑定queue<queueDeclare是创建queue的，rabbitmq有你要用的queue则无需去创建，queueBind去绑定queue>，producer不绑定queue>
+
+  producer发送消息给rabbitmq时 要使用一个exchange，和routeKey<fanout类型的exchange，不受routeKey的影响，会发送到rabbitmq的所有的queue>
+  exchange的类型为topic<模糊匹配routeKey [ *，#  ]> or direct<等值匹配routeKey>  producer发送的终点为exchange，
+  producer发送消息会 //todo channel.basicPublish(exchange_name, routeKey, null, message.getBytes(StandardCharsets.UTF_8));
+  exchange_name+routeKey--->queue会有  exchange-exchange_name---routeKey-routeKey ,queue会获取到exchange发送的message
+  而rabbitmq内部会把message发送到符合条件的queue< 符合条件--> 这个queue 持有  >
