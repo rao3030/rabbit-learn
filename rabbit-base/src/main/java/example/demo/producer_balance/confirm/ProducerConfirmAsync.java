@@ -1,8 +1,9 @@
-package example.demo.producer_balance.producerconfirm;
+package example.demo.producer_balance.confirm;
 
 import com.rabbitmq.client.*;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -71,6 +72,8 @@ public class ProducerConfirmAsync {
             channel.basicPublish(EXCHANGE_NAME, routekey, true,
                     MessageProperties.PERSISTENT_BASIC, message.getBytes());
         }
+        //addConfirmListener是守护线程的
+        TimeUnit.SECONDS.sleep(3);
         // 关闭频道和连接
         channel.close();
         connection.close();

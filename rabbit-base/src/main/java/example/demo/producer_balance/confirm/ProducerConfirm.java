@@ -1,4 +1,4 @@
-package example.demo.producer_balance.producerconfirm;
+package example.demo.producer_balance.confirm;
 
 import com.rabbitmq.client.*;
 

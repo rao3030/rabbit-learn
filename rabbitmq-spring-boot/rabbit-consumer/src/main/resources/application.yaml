@@ -1,9 +1,19 @@
-server:
-  port: 8111
+
 spring:
   rabbitmq:
     host: 127.0.0.1
     port: 5672
     username: guest
     password: guest
-    virtualHost: /
+    publisher-confirms: true
+    publisher-returns: true
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 5000ms
+server:
+  port: 8111
