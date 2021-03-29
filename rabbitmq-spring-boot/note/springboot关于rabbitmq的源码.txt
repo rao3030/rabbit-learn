@@ -1,0 +1,89 @@
+
+    点开 Maven：org.spring.framework.boot:spring-boot-autoconfigure
+    找到 META-INF的spring.factories
+
+    # Auto Configure
+    org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+    ...
+    org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+
+    todo 第一个关键入场类--> SpringApplication
+    这个类 完成了 当前环境是什么<怎么判断的 就是利用反射  Class.forName("java.servlet.Servlet")
+    没catch Exception 说明是web环境（在springboot是WebApplicationType.SERVLET）
+    只要你导入 web的启动器就会自动依赖servlet的jar包，这个jar就会有java.servlet.Servlet>
+
+    完成new 哪一种类型的spring-context <WebApplicationType.SERVLET对应的是 AnnotationConfigServletWebServerApplicationContext>
+    反射调用的是这个spring-context的无参构造。
+    这个无参构造--完成了主要是加了几个比较重要的 //看这个方法AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
+    ConfigurationClassPostProcessor<这个是完成了>
+    AutowiredAnnotationBeanPostProcessor
+	CommonAnnotationBeanPostProcessor
+	EventListenerMethodProcessor
+	DefaultEventListenerFactory
+	
+	ClassPathBeanDefinitionScanner--使用的是default的就是这样的includeFilters.add(new AnnotationTypeFilter(Component.class))
+	
+	prepareBeanFactory(beanFactory);主要是添加了一个Aware接口回调的ApplicationContextAwareProcessor
+	与ApplicationListenerDetector
+	
+	postProcessBeanFactory(beanFactory);   添加了WebApplicationContextServletContextAwareProcessor，
+	并且添加了两个Scope<SessionScope,RequestScope>
+	
+	invokeBeanFactoryPostProcessors(beanFactory);关键的一个地方
+	就会调用ConfigurationClassPostProcessor(完成这个getBean之后，调用这个类的postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry)方法)
+	就会拿到@SpringBootApplication的类<一般情况下，这个时候的beanfactory的BeanDefinitions只有这个类符合条件
+	<条件是含有这些个注解---Configuration-full，or  Component,ComponentScan,Import,ImportResource,Bean 对应的是lite>>
+	解析这个@SpringBootApplication的类对应的BeanDefinition
+	
+	如果有@Component 就会去处理这个BeanDefinition对应类的内部类
+	如果有@PropertySource(xx.properties) 就会 就会将这个xx.properties文件的内容封装成PropertySource对像，放到
+	StandardServletEnvironment的propertySources《key-value的 key这个xx.properties文件名》 以后的SpringExpression@Value("#{xx}")
+	如果有@ComponentScan or @ComponentScans注解 解析这个就是决定扫描那些包的封装成BeanDefinition
+	ClassPathBeanDefinitionScanner去解析class文件，符合条件的就会包装成BeanDefinition对象
+	doScan方法，就是扫描BeanDefinition的关键入口点
+	如果有@Import注解，一直递归式寻找，拿到这个类的所有注解，还会去找注解的注解，collect 所有的@Import注解
+	@SpringBootApplication的就会有两个@Import
+	一个是AutoConfigurationImportSelector 另一个是AutoConfigurationPackages.Registrar
+	如果有@ImportResource("XXXSpring.xml")注解的话 将内容加载到Spring-contex中
+	如果有@Bean的方法 就会将这个类的所有的@Bean方法封装成BeanDefinition
+	解析忘完了之前满足条件的BeanDefinition<即之前的那个@SpringBootApplication的类>
+	/---------------------------上面完成了BeanDefinition收集(自己编辑的Bean)---第一步收集BeanDefinition---------------------------/
+	
+	来到了关键的一步 this.deferredImportSelectorHandler.process(); 自动装配的起点<不是自己编写的Bean，完成自动配置的BeanDefinition的收集>
+	起点--AutoConfigurationImportSelector
+	会拿到SpringFactoriesLoader之前缓存META-INF/spring.factories的内容 拿到含有@EnableAutoConfiguration注解的所有value
+	由三个类筛选出符合条件的class，通过筛选的class就会包装成BeanDefinition、
+	会将这些个value进行Class.forName+@XXXCondition 都成立  导入对应的jar，就会导入对应的class文件
+
+	//autoconfiguration的那个key对应的有118个，ctrl+f+计数==118个
+	这三个类由
+	if (!match[i]) {
+		skip[i] = true;
+	}
+
+	1-OnClassCondition                    这三个类基于@ConditionXXX注解，满足@Condition满足，就可以加入了，拿到满足@Condition的所有的类名。
+	2-OnWebApplicationCondition    	    
+	3-OnBeanCondition					 
+	这三步筛选 决定了是否skip[118]，进行这三步筛选之后，得到符合条件的类名
+	再次交给ConfigurationClassParser.processImports，对这些个类名进行反射，在包装成SourceClass，再去解析
+	@Component,@Import,跟之前解析@SpringBootApplication的类一样的流程。
+	收集完所有的BeanDefinition的类之后-----------------第二步收集BeanDefinition
+	
+	把之前collect的@Bean Method，封装成BeanDefinition，@Import注解的封装成BeanDefinition，----------第三步收集BeanDefinition
+	
+	接下来，又调用到了ConfigurationClassPostProcessor.postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory)
+	使用cglib代理@Configuration的
+	新增加了ImportAwareBeanPostProcessor，todo-->hasInstantiationAwareBeanPostProcessors = true;进行di的关键开关。后面所有的getBean就可以进行了di了。
+	
+	会将
+    todo 第二关键的类 SpringFactoriesLoader
+    这个类会把所有的META-INF/spring.factories 这样的文件 进行io的交互
+    收集 存放在 SpringFactoriesLoader的Map<ClassLoader, MultiValueMap<String, String>> cache = new ConcurrentReferenceHashMap<>();
+
+# Auto Configure
+MultiValueMap 是这样的 一个key对应多个value， key==value1 , value2 , ... value是LinkedList存储的
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.springframework.boot.autoconfigure.admin.SpringApplicationAdminJmxAutoConfiguration,\
+org.springframework.boot.autoconfigure.aop.AopAutoConfiguration,\
+org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration,\
